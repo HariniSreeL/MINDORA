@@ -12,8 +12,8 @@ class ProgressPage extends StatelessWidget {
   static const Color cream = Color(0xFFF8F6EF);
   static const Color dark = Color(0xFF344E41);
 
-  String tr(String english, String hindi) =>
-      AppSettings.instance.isHindi ? hindi : english;
+  String tr(String english, String hindi, {String? key}) =>
+      AppSettings.instance.trBilingual(english, hindi, key: key);
 
   String formatDuration(Duration duration) {
     if (duration.inMinutes < 1) {

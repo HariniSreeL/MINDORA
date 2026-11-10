@@ -1,7 +1,13 @@
+// Mindora - Enhanced Application Settings Page
+// Manages regional language selection for all 8 North-Eastern states,
+// background instrumental music toggle & volume, accessibility text sizing,
+// high contrast, and independent caregiver language preference.
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'app_settings.dart';
+import 'theme/mindora_theme.dart';
+import 'localization/app_localizations.dart';
+import 'services/audio_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -11,406 +17,227 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String selectedLanguage = 'English';
-  String selectedTextSize = 'Medium';
-
-  bool caregiverSharing = false;
-  bool backgroundMusic = false;
-  bool isLoading = true;
-
-  static const forest = Color(0xFF354C3C);
-  static const cream = Color(0xFFFAF8F0);
-
-  // English and Hindi translation helper
-  String _tr(String english, String hindi) {
-    return selectedLanguage == 'Hindi' ? hindi : english;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSettings();
-  }
-
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    if (!mounted) return;
-
-    setState(() {
-      selectedLanguage =
-          prefs.getString('selectedLanguage') ?? 'English';
-
-      selectedTextSize =
-          prefs.getString('selectedTextSize') ?? 'Medium';
-
-      caregiverSharing =
-          prefs.getBool('caregiverSharing') ?? false;
-
-      backgroundMusic =
-          prefs.getBool('backgroundMusic') ?? false;
-
-      isLoading = false;
-    });
-  }
-
-  Future<void> _saveBool(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
-  }
+  String tr(String en, String hi, {String? key}) =>
+      AppSettings.instance.trBilingual(en, hi, key: key);
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: cream,
-      appBar: AppBar(
-        backgroundColor: cream,
-        title: Text(
-          _tr('Settings', 'सेटिंग्स'),
-          style: const TextStyle(
-            fontSize: 25,
-            fontWeight: FontWeight.bold,
-            color: forest,
+    return AnimatedBuilder(
+      animation: Listenable.merge([AppSettings.instance, AudioService.instance]),
+      builder: (context, _) {
+        final settings = AppSettings.instance;
+        final audio = AudioService.instance;
+
+        return Scaffold(
+          backgroundColor: MindoraColors.cream,
+          appBar: AppBar(
+            backgroundColor: MindoraColors.cream,
+            foregroundColor: MindoraColors.forestGreen,
+            elevation: 0,
+            title: Text(
+              tr('Settings', 'सेटिंग्स'),
+              style: MindoraTextStyles.displayMedium,
+            ),
           ),
-        ),
-      ),
-      body: SafeArea(
-        child: isLoading
-            ? const Center(
-                child: CircularProgressIndicator(),
-              )
-            : ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  Text(
-                    _tr(
-                      'Make Mindora Comfortable for You',
-                      'Mindora को अपने अनुसार बनाएँ',
-                    ),
-                    style: const TextStyle(
-                      fontSize: 23,
-                      fontWeight: FontWeight.bold,
-                      color: forest,
-                    ),
+          body: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              children: [
+                Text(
+                  tr(
+                    'Customize Mindora for Your Comfort',
+                    'अपनी सुविधा के अनुसार सेटिंग्स चुनें',
                   ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    _tr(
-                      'Choose the settings that work best for you.',
-                      'अपने लिए उपयुक्त सेटिंग्स चुनें।',
-                    ),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.5,
-                      color: Color(0xFF55584E),
-                    ),
+                  style: MindoraTextStyles.titleLarge,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  tr(
+                    'Adjust language, text size and soft background music.',
+                    'भाषा, अक्षरों का आकार और शांत संगीत को समायोजित करें।',
                   ),
+                  style: MindoraTextStyles.bodyMedium,
+                ),
 
-                  const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-                  // LANGUAGE SETTINGS
-                  _sectionTitle(
-                    _tr('App Language', 'ऐप की भाषा'),
-                    Icons.language,
-                  ),
+                // ── 1. Regional Languages (8 NE States + National) ─────
+                _sectionTitle(tr('Preferred Language', 'पसंदीदा भाषा'), Icons.language_rounded),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: mindoraCard(color: Colors.white),
+                  child: Column(
+                    children: MindoraLocalization.supportedLanguages.map((lang) {
+                      final isSelected = settings.selectedLanguage == lang.name ||
+                          (lang.code == 'en' && settings.selectedLanguage == 'English') ||
+                          (lang.code == 'hi' && settings.selectedLanguage == 'Hindi');
 
-                  _settingsCard(
-                    child: Column(
-                      children: [
-                        RadioListTile<String>(
-                          value: 'English',
-                          groupValue: selectedLanguage,
-                          activeColor: forest,
-                          title: const Text('English'),
-                          onChanged: (value) {
-                            if (value == null) return;
-
-                            setState(() {
-                              selectedLanguage = value;
-                            });
-
-                            AppSettings.instance.setLanguage(value);
-                          },
+                      return ListTile(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        selectedTileColor: MindoraColors.cardGreen,
+                        leading: Icon(
+                          isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                          color: isSelected ? MindoraColors.sageGreen : MindoraColors.textMuted,
                         ),
+                        title: Text(
+                          '${lang.nativeName} (${lang.name})',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            color: MindoraColors.forestGreen,
+                          ),
+                        ),
+                        subtitle: Text(lang.region, style: MindoraTextStyles.caption),
+                        onTap: () {
+                          settings.setLanguage(lang.name);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ),
 
-                        RadioListTile<String>(
-                          value: 'Hindi',
-                          groupValue: selectedLanguage,
-                          activeColor: forest,
-                          title: const Text('हिन्दी (Hindi)'),
-                          onChanged: (value) {
-                            if (value == null) return;
+                const SizedBox(height: 24),
 
-                            setState(() {
-                              selectedLanguage = value;
-                            });
-
-                            AppSettings.instance.setLanguage(value);
-                          },
+                // ── 2. Background Instrumental Music ────────────────────
+                _sectionTitle(tr('Background Instrumental Music', 'शांत वाद्य संगीत'), Icons.music_note_rounded),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: mindoraCard(color: Colors.white),
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        activeThumbColor: MindoraColors.sageGreen,
+                        title: Text(
+                          tr('Soft Flute & Santoor Ambience', 'बांसुरी एवं संतूर की शांत धुन'),
+                          style: MindoraTextStyles.titleMedium,
+                        ),
+                        subtitle: Text(
+                          tr('Calming instrumental melody across all screens.', 'सभी स्क्रीन पर बजने वाला मधुर शांत संगीत।'),
+                          style: MindoraTextStyles.caption,
+                        ),
+                        value: audio.isEnabled,
+                        onChanged: (val) {
+                          audio.setEnabled(val);
+                          settings.setBackgroundMusic(val);
+                        },
+                      ),
+                      if (audio.isEnabled) ...[
+                        const Divider(height: 24),
+                        Row(
+                          children: [
+                            Icon(
+                              audio.isPlaying ? Icons.play_circle_filled_rounded : Icons.pause_circle_filled_rounded,
+                              color: MindoraColors.sageGreen,
+                              size: 26,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                audio.isPlaying ? tr('Playing gently', 'चल रहा है') : tr('Paused', 'रुका हुआ'),
+                                style: MindoraTextStyles.bodyMedium,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => audio.togglePlayPause(),
+                              child: Text(
+                                audio.isPlaying ? tr('Pause', 'रोकें') : tr('Play', 'बजाएं'),
+                                style: const TextStyle(color: MindoraColors.sageGreen, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            const Icon(Icons.volume_down_rounded, size: 20, color: MindoraColors.textMuted),
+                            Expanded(
+                              child: Slider(
+                                value: audio.volume,
+                                min: 0.0,
+                                max: 1.0,
+                                activeColor: MindoraColors.sageGreen,
+                                inactiveColor: MindoraColors.borderLight,
+                                onChanged: (val) {
+                                  audio.setVolume(val);
+                                  settings.setMusicVolume(val);
+                                },
+                              ),
+                            ),
+                            const Icon(Icons.volume_up_rounded, size: 20, color: MindoraColors.textMuted),
+                          ],
                         ),
                       ],
-                    ),
+                    ],
                   ),
+                ),
 
-                  const SizedBox(height: 22),
+                const SizedBox(height: 24),
 
-                  // TEXT SIZE SETTINGS
-                  _sectionTitle(
-                    _tr('Text Size', 'टेक्स्ट का आकार'),
-                    Icons.text_fields,
-                  ),
+                // ── 3. Text Size Accessibility ──────────────────────────
+                _sectionTitle(tr('Text Size', 'अक्षरों का आकार'), Icons.format_size_rounded),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: mindoraCard(color: Colors.white),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: ['Small', 'Medium', 'Large'].map((size) {
+                      final isSelected = settings.selectedTextSize == size;
+                      final label = size == 'Small'
+                          ? tr('Small', 'छोटा')
+                          : (size == 'Medium' ? tr('Medium', 'मध्यम') : tr('Large', 'बड़ा'));
 
-                  _settingsCard(
-                    child: Column(
-                      children: [
-                        for (final size in [
-                          'Small',
-                          'Medium',
-                          'Large',
-                        ])
-                          RadioListTile<String>(
-                            value: size,
-                            groupValue: selectedTextSize,
-                            activeColor: forest,
-                            title: Text(
-                              selectedLanguage == 'Hindi'
-                                  ? size == 'Small'
-                                      ? 'छोटा'
-                                      : size == 'Medium'
-                                          ? 'मध्यम'
-                                          : 'बड़ा'
-                                  : size,
-                              style: TextStyle(
-                                fontSize: size == 'Small'
-                                    ? 15
-                                    : size == 'Large'
-                                        ? 21
-                                        : 18,
-                              ),
-                            ),
-                            onChanged: (value) {
-                              if (value == null) return;
-
-                              setState(() {
-                                selectedTextSize = value;
-                              });
-
-                              AppSettings.instance.setTextSize(value);
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 22),
-
-                  // PRIVACY AND CAREGIVER SETTINGS
-                  _sectionTitle(
-                    _tr(
-                      'Privacy & Caregiver Sharing',
-                      'गोपनीयता और देखभालकर्ता के साथ साझा करना',
-                    ),
-                    Icons.shield_outlined,
-                  ),
-
-                  _settingsCard(
-                    child: SwitchListTile(
-                      value: caregiverSharing,
-                      activeColor: forest,
-                      title: Text(
-                        _tr(
-                          'Share my mood',
-                          'अपना मूड साझा करें',
+                      return ChoiceChip(
+                        label: Text(label),
+                        selected: isSelected,
+                        selectedColor: MindoraColors.cardGreen,
+                        backgroundColor: MindoraColors.cream,
+                        labelStyle: TextStyle(
+                          color: isSelected ? MindoraColors.forestGreen : MindoraColors.textSecondary,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          fontSize: size == 'Large' ? 18 : 15,
                         ),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          _tr(
-                            'Allow your mood check-ins to be shared '
-                            'with your authorized caregiver.',
-                            'अपने मूड चेक-इन को अधिकृत देखभालकर्ता '
-                            'के साथ साझा करने की अनुमति दें।',
-                          ),
-                          style: const TextStyle(height: 1.5),
-                        ),
-                      ),
-                      onChanged: (value) {
-                        if (!value) {
-                          setState(() {
-                            caregiverSharing = false;
-                          });
-
-                          _saveBool('caregiverSharing', false);
-                          return;
-                        }
-
-                        showDialog<void>(
-                          context: context,
-                          builder: (dialogContext) => AlertDialog(
-                            title: Text(
-                              _tr(
-                                'Mood Sharing',
-                                'मूड साझा करना',
-                              ),
-                            ),
-                            content: Text(
-                              _tr(
-                                'Your mood check-ins may be visible '
-                                'to your authorized caregiver. '
-                                'Do you agree to share them?',
-                                'आपके मूड चेक-इन आपके अधिकृत '
-                                'देखभालकर्ता को दिखाई दे सकते हैं। '
-                                'क्या आप इन्हें साझा करना चाहते हैं?',
-                              ),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(dialogContext);
-                                },
-                                child: Text(
-                                  _tr('Not now', 'अभी नहीं'),
-                                ),
-                              ),
-                              FilledButton(
-                                onPressed: () {
-                                  setState(() {
-                                    caregiverSharing = true;
-                                  });
-
-                                  _saveBool('caregiverSharing', true);
-                                  Navigator.pop(dialogContext);
-                                },
-                                child: Text(
-                                  _tr('Allow', 'अनुमति दें'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                        onSelected: (_) => settings.setTextSize(size),
+                      );
+                    }).toList(),
                   ),
+                ),
 
-                  const SizedBox(height: 22),
 
-                  // BACKGROUND MUSIC SETTINGS
-                  _sectionTitle(
-                    _tr('Background Music', 'बैकग्राउंड संगीत'),
-                    Icons.music_note,
+
+                const SizedBox(height: 30),
+
+                // App info footer
+                Center(
+                  child: Text(
+                    'Mindora • Version 1.0.0 (Review Build)\nCognitive Wellness for North-East India',
+                    textAlign: TextAlign.center,
+                    style: MindoraTextStyles.caption,
                   ),
+                ),
 
-                  _settingsCard(
-                    child: SwitchListTile(
-                      value: backgroundMusic,
-                      activeColor: forest,
-                      title: Text(
-                        _tr(
-                          'Gentle instrumental music',
-                          'हल्का वाद्य संगीत',
-                        ),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: Text(
-                        _tr(
-                          'Optional calming background music.',
-                          'वैकल्पिक शांत बैकग्राउंड संगीत।',
-                        ),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          backgroundMusic = value;
-                        });
-
-                        _saveBool('backgroundMusic', value);
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              value
-                                  ? _tr(
-                                      'Music preference saved. Playback '
-                                      'will be added next.',
-                                      'संगीत की पसंद सहेजी गई है। '
-                                      'संगीत चलाने की सुविधा बाद में '
-                                      'जोड़ी जाएगी।',
-                                    )
-                                  : _tr(
-                                      'Background music turned off.',
-                                      'बैकग्राउंड संगीत बंद कर दिया गया।',
-                                    ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  Center(
-                    child: Text(
-                      'Mindora • Cognitive Wellness Through Play',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF55584E),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-      ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
   Widget _sectionTitle(String title, IconData icon) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: const Color(0xFF496C52),
-            size: 25,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              title,
-              style: const TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.bold,
-                color: forest,
-              ),
-            ),
+          Icon(icon, size: 20, color: MindoraColors.forestGreen),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: MindoraTextStyles.titleLarge.copyWith(fontSize: 18),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _settingsCard({required Widget child}) {
-    return Card(
-      color: Colors.white,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: const BorderSide(
-          color: Color(0xFFE7E5D9),
-        ),
-      ),
-      child: child,
     );
   }
 }

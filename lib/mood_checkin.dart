@@ -14,8 +14,8 @@ class _MoodCheckInState extends State<MoodCheckIn> {
 
   bool get isHindi => AppSettings.instance.isHindi;
 
-  String tr(String english, String hindi) {
-    return isHindi ? hindi : english;
+  String tr(String english, String hindi, {String? key}) {
+    return AppSettings.instance.trBilingual(english, hindi, key: key);
   }
 
   final List<Map<String, dynamic>> moods = [
