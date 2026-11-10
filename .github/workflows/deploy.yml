@@ -31,14 +31,14 @@ jobs:
 
       - name: Install dependencies
         run: flutter pub get
-        working-directory: flutter_application_1
+        
 
       - name: Build Flutter web
         run: |
           flutter build web --release \
             --base-href /MINDORA/ \
             --dart-define=MINDORA_API_BASE_URL=https://HariniSreeL.pythonanywhere.com/api
-        working-directory: flutter_application_1
+        
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -46,7 +46,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: flutter_application_1/build/web
+          path: build/web
 
   deploy:
     environment:
