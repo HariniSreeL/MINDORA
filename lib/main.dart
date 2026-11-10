@@ -14,12 +14,15 @@ import 'screens/feel_good_screen.dart';
 import 'screens/caregiver_login_screen.dart';
 import 'models/level_data.dart';
 import 'services/audio_service.dart';
+import 'services/api_service.dart';
+import 'screens/user_auth_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppSettings.instance.loadSettings();
   await LevelProgressManager.instance.loadProgress();
   await AudioService.instance.initialize();
+  await ApiService.instance.initialize();
   runApp(const MindoraApp());
 }
 
@@ -58,7 +61,43 @@ class MindoraApp extends StatelessWidget {
               child: child!,
             );
           },
-          home: const HomeScreen(),
+          home: const AuthGate(),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Auth Gate
+// ─────────────────────────────────────────────────────────────────────────────
+
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  bool _guest = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: ApiService.instance,
+      builder: (context, _) {
+        final api = ApiService.instance;
+        if (api.isAuthenticated) {
+          return const HomeScreen();
+        }
+        if (_guest) {
+          return const HomeScreen();
+        }
+        return UserAuthScreen(
+          showBackButton: false,
+          onAuthenticated: () => setState(() => _guest = false),
+          onGuest: () => setState(() => _guest = true),
         );
       },
     );

@@ -1,3 +1,4 @@
+import 'api_service.dart';
 // Mindora - Adaptive Difficulty Engine
 // Modular cognitive comfort evaluation system designed for elderly users.
 // Evaluates performance signals (correct actions, errors, hints requested, repeated attempts)
@@ -62,6 +63,9 @@ class AdaptiveDifficulty {
 
   void recordSession(SessionMetrics metrics) {
     _history.add(metrics);
+    try {
+      ApiService.instance.recordGameSession(metrics);
+    } catch (_) {}
   }
 
   /// Evaluates the user's comfort based on recent performance

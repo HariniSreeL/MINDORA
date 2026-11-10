@@ -12,7 +12,7 @@ class AudioService extends ChangeNotifier {
   AudioService._();
   static final AudioService instance = AudioService._();
 
-  final AudioPlayer _musicPlayer = AudioPlayer();
+  AudioPlayer? _musicPlayer;
   bool _isPlaying = false;
   bool _isEnabled = true;
   double _volume = 0.5;
@@ -43,10 +43,11 @@ class AudioService extends ChangeNotifier {
       _volume = prefs.getDouble('musicVolume') ?? 0.5;
 
       if (!_isTestEnv) {
-        await _musicPlayer.setReleaseMode(ReleaseMode.loop);
-        await _musicPlayer.setVolume(_volume);
+        _musicPlayer = AudioPlayer();
+        await _musicPlayer!.setReleaseMode(ReleaseMode.loop);
+        await _musicPlayer!.setVolume(_volume);
 
-        _musicPlayer.onPlayerStateChanged.listen((state) {
+        _musicPlayer!.onPlayerStateChanged.listen((state) {
           final active = state == PlayerState.playing;
           if (_isPlaying != active) {
             _isPlaying = active;
@@ -68,9 +69,9 @@ class AudioService extends ChangeNotifier {
   Future<void> startMusic() async {
     if (_isTestEnv) return;
     try {
-      await _musicPlayer.stop();
-      await _musicPlayer.setVolume(_volume);
-      await _musicPlayer.play(AssetSource('audio/ambient_flute.wav'));
+      await _musicPlayer?.stop();
+      await _musicPlayer?.setVolume(_volume);
+      await _musicPlayer?.play(AssetSource('audio/ambient_flute.wav'));
       _isPlaying = true;
       notifyListeners();
     } catch (e) {
@@ -81,7 +82,7 @@ class AudioService extends ChangeNotifier {
   Future<void> pauseMusic() async {
     if (_isTestEnv) return;
     try {
-      await _musicPlayer.pause();
+      await _musicPlayer?.pause();
       _isPlaying = false;
       notifyListeners();
     } catch (e) {
@@ -92,7 +93,7 @@ class AudioService extends ChangeNotifier {
   Future<void> resumeMusic() async {
     if (_isTestEnv) return;
     try {
-      await _musicPlayer.resume();
+      await _musicPlayer?.resume();
       _isPlaying = true;
       notifyListeners();
     } catch (e) {
@@ -137,7 +138,7 @@ class AudioService extends ChangeNotifier {
     if (!enabled) {
       _wasPlayingBeforePriority = false;
       if (!_isTestEnv) {
-        await _musicPlayer.stop();
+        await _musicPlayer?.stop();
       }
       _isPlaying = false;
     } else {
@@ -155,7 +156,7 @@ class AudioService extends ChangeNotifier {
     _volume = val.clamp(0.0, 1.0);
     if (!_isTestEnv) {
       try {
-        await _musicPlayer.setVolume(_volume);
+        await _musicPlayer?.setVolume(_volume);
       } catch (_) {}
     }
     notifyListeners();

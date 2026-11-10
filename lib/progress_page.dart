@@ -4,13 +4,50 @@ import 'package:fl_chart/fl_chart.dart';
 
 import 'app_settings.dart';
 import 'game_progress.dart';
+import 'services/api_service.dart';
 
-class ProgressPage extends StatelessWidget {
+class ProgressPage extends StatefulWidget {
   const ProgressPage({super.key});
 
+  @override
+  State<ProgressPage> createState() => _ProgressPageState();
+}
+
+class _ProgressPageState extends State<ProgressPage> {
   static const Color green = Color(0xFF52796F);
   static const Color cream = Color(0xFFF8F6EF);
   static const Color dark = Color(0xFF344E41);
+
+  bool _loading = false;
+  String? _serverError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final api = ApiService.instance;
+    if (!api.isAuthenticated || !api.isUser) return;
+    if (mounted) setState(() => _loading = true);
+    final rows = await api.fetchGameHistory(limit: 100);
+    if (!mounted) return;
+    if (rows == null) {
+      setState(() {
+        _loading = false;
+        _serverError = api.lastError ??
+            tr('Could not refresh from the server. Showing saved local activity.',
+                'सर्वर से रीफ़्रेश नहीं हो सका। सहेजी गई स्थानीय गतिविधि दिखाई जा रही है।');
+      });
+      return;
+    }
+    GameProgress.instance.replaceFromServer(rows);
+    setState(() {
+      _loading = false;
+      _serverError = null;
+    });
+  }
 
   String tr(String english, String hindi, {String? key}) =>
       AppSettings.instance.trBilingual(english, hindi, key: key);
@@ -49,9 +86,13 @@ class ProgressPage extends StatelessWidget {
                 foregroundColor: dark,
                 elevation: 0,
               ),
-              body: ListView(
-                padding: const EdgeInsets.all(18),
-                children: [
+              body: RefreshIndicator(
+                onRefresh: _loadHistory,
+                color: green,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(18),
+                  children: [
                   Text(
                     tr('Your Journey 🌿', 'आपकी यात्रा 🌿'),
                     style: const TextStyle(
@@ -71,6 +112,45 @@ class ProgressPage extends StatelessWidget {
                       fontSize: 14,
                     ),
                   ),
+                  if (_loading)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 14),
+                      child: Row(
+                        children: [
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(tr('Syncing your progress…', 'आपकी प्रगति सिंक हो रही है…')),
+                        ],
+                      ),
+                    ),
+                  if (_serverError != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: 14),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF5EBD4),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.cloud_off_rounded,
+                              size: 18, color: green),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(_serverError!,
+                                style: const TextStyle(fontSize: 12)),
+                          ),
+                          TextButton(
+                            onPressed: _loadHistory,
+                            child: Text(tr('Retry', 'पुनः प्रयास')),
+                          ),
+                        ],
+                      ),
+                    ),
                   const SizedBox(height: 20),
 
                   GridView.count(
@@ -290,6 +370,7 @@ class ProgressPage extends StatelessWidget {
                     textAlign: TextAlign.center,
                   ),
                 ],
+                ),
               ),
             );
           },

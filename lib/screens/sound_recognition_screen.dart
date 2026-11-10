@@ -9,6 +9,7 @@ import '../theme/mindora_theme.dart';
 import '../app_settings.dart';
 import '../models/level_data.dart';
 import '../services/adaptive_difficulty.dart';
+import '../services/api_service.dart';
 import '../services/audio_service.dart';
 import '../game_progress.dart';
 import 'level_progression_screen.dart';
@@ -175,6 +176,7 @@ class _SoundRecognitionScreenState extends State<SoundRecognitionScreen>
     super.initState();
     currentLevel = widget.initialLevel;
     stopwatch = Stopwatch()..start();
+    ApiService.instance.beginGameSession('sound_recognition', currentLevel);
 
     _waveController = AnimationController(
       vsync: this,
@@ -211,6 +213,7 @@ class _SoundRecognitionScreenState extends State<SoundRecognitionScreen>
   }
 
   void _loadLevel(int lvl) async {
+    ApiService.instance.beginGameSession('sound_recognition', lvl);
     await _audioPlayer.stop();
     await AudioService.instance.resumeAfterPriorityAudio();
     setState(() {

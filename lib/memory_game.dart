@@ -9,6 +9,7 @@ import 'theme/mindora_theme.dart';
 import 'game_progress.dart';
 import 'models/level_data.dart';
 import 'services/adaptive_difficulty.dart';
+import 'services/api_service.dart';
 import 'screens/level_progression_screen.dart';
 
 class MemoryCardItem {
@@ -103,6 +104,8 @@ class _MemoryGameState extends State<MemoryGame> {
   }
 
   void _startLevel(int level) {
+    ApiService.instance.beginGameSession('memory_match', level,
+        relaxedMode: relaxedMode);
     stopwatch.reset();
     stopwatch.start();
     elapsedSeconds = 0;

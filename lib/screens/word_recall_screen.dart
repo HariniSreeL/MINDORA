@@ -8,6 +8,7 @@ import '../theme/mindora_theme.dart';
 import '../app_settings.dart';
 import '../models/level_data.dart';
 import '../services/adaptive_difficulty.dart';
+import '../services/api_service.dart';
 import '../game_progress.dart';
 import 'level_progression_screen.dart';
 
@@ -110,6 +111,7 @@ class _WordRecallScreenState extends State<WordRecallScreen> {
   }
 
   void _startLevel(int lvl) {
+    ApiService.instance.beginGameSession('word_recall', lvl);
     currentLevel = lvl;
     currentPhase = RecallPhase.study;
     userSelectedIds.clear();

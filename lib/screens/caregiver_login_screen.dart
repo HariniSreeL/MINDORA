@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../theme/mindora_theme.dart';
 import '../app_settings.dart';
 import '../caregiver_portal.dart';
+import '../services/api_service.dart';
 
 class CaregiverLoginScreen extends StatefulWidget {
   const CaregiverLoginScreen({super.key});
@@ -16,35 +17,57 @@ class CaregiverLoginScreen extends StatefulWidget {
 }
 
 class _CaregiverLoginScreenState extends State<CaregiverLoginScreen> {
-  final _emailController = TextEditingController(text: 'caregiver@mindora.org');
-  final _passwordController = TextEditingController(text: 'MindoraCare2026');
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _registerMode = false;
 
   bool get isHindi => AppSettings.instance.isHindi;
   String tr(String en, String hi, {String? key}) => AppSettings.instance.trBilingual(en, hi, key: key);
 
   @override
   void dispose() {
+    _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _handleLogin() {
+  Future<void> _handleLogin() async {
     setState(() => _isLoading = true);
-
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const CaregiverPortal(),
+    Map<String, dynamic>? result;
+    if (_registerMode) {
+      result = await ApiService.instance.register(
+        name: _nameController.text,
+        email: _emailController.text,
+        password: _passwordController.text,
+        role: 'caregiver',
+      );
+    } else {
+      result = await ApiService.instance.caregiverLogin(
+        email: _emailController.text,
+        password: _passwordController.text,
+      );
+    }
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    if (result == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ApiService.instance.lastError ??
+                tr('Could not sign in. Please check your details.', 'साइन इन नहीं हो सका।'),
+          ),
         ),
       );
-    });
+      return;
+    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const CaregiverPortal()),
+    );
   }
 
   void _showForgotPasswordDialog() {
@@ -59,8 +82,8 @@ class _CaregiverLoginScreenState extends State<CaregiverLoginScreen> {
         ),
         content: Text(
           tr(
-            'In the upcoming backend integration, a secure password reset link will be sent to your registered caregiver email address.',
-            'आगामी बैकएंड अपडेट में आपके पंजीकृत देखभालकर्ता ईमेल पर पासवर्ड रीसेट लिंक भेजा जाएगा।',
+            'Password reset is not available in this build. Please contact the Mindora administrator to reset your caregiver account securely.',
+            'इस बिल्ड में पासवर्ड रीसेट उपलब्ध नहीं है। अपना देखभालकर्ता खाता सुरक्षित रूप से रीसेट कराने के लिए कृपया Mindora प्रशासक से संपर्क करें।',
           ),
           style: MindoraTextStyles.bodyMedium,
         ),
@@ -137,6 +160,24 @@ class _CaregiverLoginScreenState extends State<CaregiverLoginScreen> {
                   ),
 
                   const SizedBox(height: 28),
+
+                  if (_registerMode) ...[
+                    Text(
+                      tr('Your name', 'आपका नाम'),
+                      style: MindoraTextStyles.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _nameController,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white,
+                        prefixIcon: const Icon(Icons.person_outline, color: MindoraColors.sageGreen),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
 
                   // Email Field
                   Text(
@@ -230,13 +271,27 @@ class _CaregiverLoginScreenState extends State<CaregiverLoginScreen> {
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
                             )
                           : Text(
-                              tr('Sign In to Dashboard', 'डैशबोर्ड में प्रवेश करें'),
+                              _registerMode
+                                  ? tr('Create Caregiver Account', 'देखभालकर्ता खाता बनाएँ')
+                                  : tr('Sign In to Dashboard', 'डैशबोर्ड में प्रवेश करें'),
                               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                             ),
                     ),
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => setState(() => _registerMode = !_registerMode),
+                      child: Text(
+                        _registerMode
+                            ? tr('I already have an account', 'मेरा खाता पहले से है')
+                            : tr('Create a caregiver account', 'देखभालकर्ता खाता बनाएँ'),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
 
                   // Privacy banner
                   Container(

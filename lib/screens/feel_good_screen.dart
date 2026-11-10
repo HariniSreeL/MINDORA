@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import '../app_settings.dart';
+import '../services/api_service.dart';
 import '../theme/mindora_theme.dart';
 
 class FeelGoodScreen extends StatefulWidget {
@@ -21,6 +22,7 @@ class _FeelGoodScreenState extends State<FeelGoodScreen>
   bool _isPaused = false;
   int _breathPhase = 0; // 0=idle, 1=inhale, 2=hold, 3=exhale
   bool _soundChimeOn = true;
+  DateTime? _sessionStartedAt;
 
   String _currentMessage = '';
   bool _showMessage = false;
@@ -57,6 +59,9 @@ class _FeelGoodScreenState extends State<FeelGoodScreen>
       AppSettings.instance.trBilingual(english, hindi, key: key);
 
   Future<void> _startBreathingCycle() async {
+    if (!_isBreathing) {
+      _sessionStartedAt = DateTime.now();
+    }
     setState(() {
       _isBreathing = true;
       _isPaused = false;
@@ -89,21 +94,51 @@ class _FeelGoodScreenState extends State<FeelGoodScreen>
     _breatheController.stop();
   }
 
-  void _stopBreathing() {
+  Future<void> _stopBreathing() async {
+    final started = _sessionStartedAt;
+    final elapsed = started == null
+        ? 0
+        : DateTime.now().difference(started).inSeconds;
     setState(() {
       _isBreathing = false;
       _isPaused = false;
       _breathPhase = 0;
+      _sessionStartedAt = null;
     });
     _breatheController.reset();
+
+    if (elapsed < 5) return;
+    final synced = await ApiService.instance.logFeelGood(
+      'breathing',
+      title: 'Gentle Breathing',
+      durationSeconds: elapsed.toDouble(),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          synced
+              ? tr('Breathing session saved and synced.',
+                  'श्वास सत्र सहेजा और सिंक किया गया।')
+              : tr(
+                  'Breathing session saved on this device. It will sync when you are signed in and online.',
+                  'श्वास सत्र इस डिवाइस पर सहेजा गया। साइन इन और ऑनलाइन होने पर यह सिंक हो जाएगा।',
+                ),
+        ),
+      ),
+    );
   }
 
-  void _showEncouragement() {
+  Future<void> _showEncouragement() async {
     final index = DateTime.now().second % _messages.length;
     setState(() {
       _currentMessage = _messages[index];
       _showMessage = true;
     });
+    await ApiService.instance.logFeelGood(
+      'encouragement',
+      title: 'Kind Message',
+    );
   }
 
   @override

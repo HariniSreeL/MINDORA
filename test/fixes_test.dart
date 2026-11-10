@@ -20,6 +20,7 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     await AppSettings.instance.loadSettings();
+    await AudioService.instance.initialize();
   });
 
   test('Requirement 1 & Regional Languages: Dynamic translation engine intact', () {
@@ -52,7 +53,12 @@ void main() {
     expect(find.text('Caregiver Portal Language'), findsNothing);
     expect(find.textContaining('Caregiver Portal Language'), findsNothing);
 
-    // Main language selection remains present
+    // Main language selection remains present (scroll to the language card).
+    await tester.scrollUntilVisible(
+      find.text('Language'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Language'), findsOneWidget);
   });
 

@@ -7,6 +7,7 @@ import '../theme/mindora_theme.dart';
 import '../app_settings.dart';
 import '../models/level_data.dart';
 import '../services/adaptive_difficulty.dart';
+import '../services/api_service.dart';
 import '../game_progress.dart';
 import 'level_progression_screen.dart';
 
@@ -154,9 +155,11 @@ class _PatternMatchScreenState extends State<PatternMatchScreen> {
     super.initState();
     currentLevel = widget.initialLevel;
     stopwatch = Stopwatch()..start();
+    ApiService.instance.beginGameSession('pattern_match', currentLevel);
   }
 
   void _loadLevel(int lvl) {
+    ApiService.instance.beginGameSession('pattern_match', lvl);
     setState(() {
       currentLevel = lvl;
       currentChallengeIndex = 0;

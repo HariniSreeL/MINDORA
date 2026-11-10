@@ -46,3 +46,12 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Flask backend
+backend/.env
+backend/.venv/
+backend/venv/
+backend/**/__pycache__/
+backend/.pytest_cache/
+backend/database/*.db
+backend/database/*.db-*
