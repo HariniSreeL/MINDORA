@@ -95,7 +95,7 @@ class AnalyticsService:
             SELECT game_name, game_id, level, duration_seconds, score, status, created_at
             FROM game_sessions
             WHERE user_id = ? AND status NOT IN ('abandoned', 'started')
-            ORDER BY created_at DESC LIMIT 8
+            ORDER BY created_at DESC, id DESC LIMIT 8
             """,
             (user_id,),
         )

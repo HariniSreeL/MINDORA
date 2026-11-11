@@ -1,6 +1,7 @@
 # Mindora Backend - Database Management
 import os
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from werkzeug.security import generate_password_hash
 
@@ -92,6 +93,7 @@ def _ensure_columns(conn):
             ("status", "TEXT NOT NULL DEFAULT 'started'"),
             ('started_at', 'TIMESTAMP'),
             ('ended_at', 'TIMESTAMP'),
+            ('client_session_id', 'TEXT'),
         ],
     }
     for table, columns in alterations.items():
@@ -99,6 +101,17 @@ def _ensure_columns(conn):
         for name, ddl in columns:
             if name not in existing:
                 conn.execute(f'ALTER TABLE {table} ADD COLUMN {name} {ddl}')
+    # Additive uniqueness guard for client-generated idempotency keys. Existing
+    # rows keep NULL, and SQLite allows any number of NULLs in a unique index.
+    try:
+        conn.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_client '
+            'ON game_sessions(user_id, client_session_id)'
+        )
+    except sqlite3.DatabaseError as exc:
+        # Never block startup because of a legacy duplicate; the request-level
+        # lookup still prevents new duplicates.
+        print(f'Could not create client session index: {exc}')
 
 
 def _seed_initial_data(conn):
@@ -224,6 +237,16 @@ class Database:
 
     def get_conn(self):
         return get_db_connection(self.db_path)
+
+    @contextmanager
+    def transaction(self):
+        """Yields a connection whose statements commit together or not at all."""
+        conn = self.get_conn()
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def query(self, sql, params=(), one=False):
         conn = self.get_conn()

@@ -6,7 +6,6 @@
 import 'package:flutter/material.dart';
 import '../theme/mindora_theme.dart';
 import '../app_settings.dart';
-import '../caregiver_portal.dart';
 import '../services/api_service.dart';
 
 class CaregiverLoginScreen extends StatefulWidget {
@@ -64,10 +63,12 @@ class _CaregiverLoginScreenState extends State<CaregiverLoginScreen> {
       );
       return;
     }
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const CaregiverPortal()),
-    );
+    // The auth gate detects the validated caregiver session and shows the
+    // caregiver dashboard. Popping returns to it instead of leaving a second
+    // dashboard route stacked on top of role selection.
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop(true);
+    }
   }
 
   void _showForgotPasswordDialog() {
@@ -112,6 +113,11 @@ class _CaregiverLoginScreenState extends State<CaregiverLoginScreen> {
             backgroundColor: MindoraColors.cream,
             foregroundColor: MindoraColors.forestGreen,
             elevation: 0,
+            leading: IconButton(
+              tooltip: tr('Back to role selection', 'भूमिका चयन पर वापस जाएँ'),
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => Navigator.of(context).maybePop(),
+            ),
             title: Text(
               tr('Caregiver Access', 'देखभालकर्ता प्रवेश'),
               style: MindoraTextStyles.displayMedium,

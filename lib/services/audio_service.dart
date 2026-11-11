@@ -12,17 +12,30 @@ class AudioService extends ChangeNotifier {
   AudioService._();
   static final AudioService instance = AudioService._();
 
+  /// Background music is deliberately barely audible so it never competes with
+  /// game prompts. The preference slider only moves within this soft range.
+  static const double softDefaultVolume = 0.05;
+  static const double maxBackgroundVolume = 0.10;
+
   AudioPlayer? _musicPlayer;
   bool _isPlaying = false;
   bool _isEnabled = true;
-  double _volume = 0.5;
+  double _volume = softDefaultVolume;
   bool _isInitialized = false;
   bool _wasPlayingBeforePriority = false;
+  bool _starting = false;
 
   bool get isPlaying => _isPlaying;
   bool get isEnabled => _isEnabled;
   double get volume => _volume;
   bool get wasPlayingBeforePriority => _wasPlayingBeforePriority;
+
+  /// Keeps older loud preferences (for example a stored 0.5) from suddenly
+  /// becoming loud again, while still honouring quiet values inside the range.
+  static double normalizeVolume(double value) {
+    if (value > maxBackgroundVolume) return softDefaultVolume;
+    return value.clamp(0.0, maxBackgroundVolume);
+  }
 
   bool get _isTestEnv {
     if (kIsWeb) return false;
@@ -40,7 +53,9 @@ class AudioService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       _isEnabled = prefs.getBool('backgroundMusic') ?? true;
-      _volume = prefs.getDouble('musicVolume') ?? 0.5;
+      // Older builds stored 0.5 as the default. Migrate anything above the
+      // soft ceiling down to the gentle default instead of blasting the user.
+      _volume = normalizeVolume(prefs.getDouble('musicVolume') ?? softDefaultVolume);
 
       if (!_isTestEnv) {
         _musicPlayer = AudioPlayer();
@@ -67,20 +82,35 @@ class AudioService extends ChangeNotifier {
   }
 
   Future<void> startMusic() async {
-    if (_isTestEnv) return;
+    if (!_isEnabled) return;
+    // Guard against overlapping starts from the gate, settings and editor
+    // re-entry: exactly one looping player is ever created.
+    if (_starting || _isPlaying) return;
+    _starting = true;
     try {
-      await _musicPlayer?.stop();
-      await _musicPlayer?.setVolume(_volume);
-      await _musicPlayer?.play(AssetSource('audio/ambient_flute.wav'));
+      if (!_isTestEnv) {
+        _musicPlayer ??= AudioPlayer();
+        await _musicPlayer!.setReleaseMode(ReleaseMode.loop);
+        await _musicPlayer!.setVolume(_volume);
+        await _musicPlayer!.play(AssetSource('audio/ambient_flute.wav'));
+      }
       _isPlaying = true;
       notifyListeners();
     } catch (e) {
       debugPrint('Background audio start exception: $e');
+    } finally {
+      _starting = false;
     }
   }
 
   Future<void> pauseMusic() async {
-    if (_isTestEnv) return;
+    if (_isTestEnv) {
+      if (_isPlaying) {
+        _isPlaying = false;
+        notifyListeners();
+      }
+      return;
+    }
     try {
       await _musicPlayer?.pause();
       _isPlaying = false;
@@ -91,13 +121,39 @@ class AudioService extends ChangeNotifier {
   }
 
   Future<void> resumeMusic() async {
-    if (_isTestEnv) return;
+    if (!_isEnabled) return;
+    if (_isTestEnv) {
+      if (!_isPlaying) {
+        _isPlaying = true;
+        notifyListeners();
+      }
+      return;
+    }
     try {
+      // Resume at the stored soft volume even if another screen changed it.
+      await _musicPlayer?.setVolume(_volume);
       await _musicPlayer?.resume();
       _isPlaying = true;
       notifyListeners();
     } catch (e) {
       debugPrint('Background audio resume exception: $e');
+    }
+  }
+
+  /// Fully stops background audio. Used on logout so the next person starts
+  /// from silence instead of inheriting a previous listener's music.
+  Future<void> stopMusic() async {
+    _wasPlayingBeforePriority = false;
+    if (!_isTestEnv) {
+      try {
+        await _musicPlayer?.stop();
+      } catch (e) {
+        debugPrint('Background audio stop exception: $e');
+      }
+    }
+    if (_isPlaying) {
+      _isPlaying = false;
+      notifyListeners();
     }
   }
 
@@ -120,6 +176,8 @@ class AudioService extends ChangeNotifier {
       _wasPlayingBeforePriority = true;
       await pauseMusic();
     }
+    // Already paused for priority audio: keep the original flag so the music
+    // resumes once the player leaves the priority screen.
   }
 
   /// Resumes background music after a priority foreground sound finishes, stops, or navigates away,
@@ -138,7 +196,9 @@ class AudioService extends ChangeNotifier {
     if (!enabled) {
       _wasPlayingBeforePriority = false;
       if (!_isTestEnv) {
-        await _musicPlayer?.stop();
+        try {
+          await _musicPlayer?.stop();
+        } catch (_) {}
       }
       _isPlaying = false;
     } else {
@@ -153,7 +213,9 @@ class AudioService extends ChangeNotifier {
   }
 
   Future<void> setVolume(double val) async {
-    _volume = val.clamp(0.0, 1.0);
+    // Clamp into the deliberately soft range and keep the stored preference
+    // in sync so navigation never restores the previous loud value.
+    _volume = normalizeVolume(val);
     if (!_isTestEnv) {
       try {
         await _musicPlayer?.setVolume(_volume);
@@ -165,5 +227,23 @@ class AudioService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setDouble('musicVolume', _volume);
     } catch (_) {}
+  }
+
+  @visibleForTesting
+  void debugSetPlaying(bool playing) {
+    _isPlaying = playing;
+    if (!playing) _wasPlayingBeforePriority = false;
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  Future<void> debugReset() async {
+    _wasPlayingBeforePriority = false;
+    _isEnabled = true;
+    _volume = softDefaultVolume;
+    _isPlaying = false;
+    _starting = false;
+    _isInitialized = false;
+    notifyListeners();
   }
 }

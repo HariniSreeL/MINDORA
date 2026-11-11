@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS game_sessions (
     status TEXT NOT NULL DEFAULT 'started' CHECK (status IN ('started', 'completed', 'interrupted', 'abandoned')),
     relaxed_mode INTEGER NOT NULL DEFAULT 0 CHECK (relaxed_mode IN (0, 1)),
     cognitive_domain TEXT DEFAULT 'general',
+    client_session_id TEXT,
     score REAL DEFAULT 0.0,
     performance_band TEXT DEFAULT 'steady',
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

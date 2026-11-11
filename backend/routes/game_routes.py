@@ -87,6 +87,21 @@ def _parse_session_payload(data):
     }
 
 
+def _client_session_id(data):
+    """Optional idempotency key sent by the Flutter client."""
+    raw = data.get('client_session_id')
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    if len(text) > 64:
+        raise ValueError("Field 'client_session_id' is too long.")
+    if not all(char.isalnum() or char in '-_' for char in text):
+        raise ValueError("Field 'client_session_id' contains invalid characters.")
+    return text
+
+
 def _accuracy(payload):
     if payload['total_attempts']:
         return min(1.0, payload['correct'] / payload['total_attempts'])
@@ -110,9 +125,12 @@ def start_session():
         return error_response('Unsupported game.')
     try:
         level = _as_int(data.get('level'), 'level', default=1, minimum=1, maximum=MAX_LEVEL)
+        client_session_id = _client_session_id(data)
     except ValueError as exc:
         return error_response(str(exc))
 
+    # Only stale sessions are abandoned; a result for the level that just
+    # finished may still be in flight.
     SessionModel.abandon_open_sessions(user_id, game_id)
     session = SessionModel.start_session(
         user_id=user_id,
@@ -120,6 +138,7 @@ def start_session():
         level=level,
         relaxed_mode=bool(data.get('relaxed_mode', False)),
         cognitive_domain=str(data.get('cognitive_domain') or 'general')[:40],
+        client_session_id=client_session_id,
     )
     return success_response(data={'session': session}, message='Game session started.', status_code=201)
 
@@ -130,10 +149,19 @@ def submit_session_result(session_id):
     data = request.get_json(silent=True) or {}
     user_id = _current_user_id()
 
+    try:
+        client_session_id = _client_session_id(data)
+    except ValueError as exc:
+        return error_response(str(exc))
+
     existing = SessionModel.get_user_session(session_id, user_id)
+    if not existing and client_session_id:
+        # The client may retry with a session id from a stale local copy. The
+        # idempotency key still resolves to the right session for this user.
+        existing = SessionModel.get_user_session_by_client_id(user_id, client_session_id)
     if not existing:
         return error_response('Game session not found.', status_code=404)
-    if existing['status'] != 'started':
+    if existing['status'] in ('completed', 'interrupted'):
         return success_response(
             data={'session': existing, 'duplicate': True},
             message='This game result has already been saved.',
@@ -143,7 +171,7 @@ def submit_session_result(session_id):
         payload = _parse_session_payload({
             **data,
             'game_id': existing['game_id'],
-            'level': data.get('level', existing['level']),
+            'level': existing['level'],
         })
     except ValueError as exc:
         return error_response(str(exc))
@@ -156,7 +184,7 @@ def submit_session_result(session_id):
         level=payload['level'],
     )
     session = SessionModel.submit_result(
-        session_id=session_id,
+        session_id=existing['id'],
         user_id=user_id,
         score=payload['score'],
         correct_answers=payload['correct'],
@@ -195,6 +223,7 @@ def record_game_session():
     user_id = _current_user_id()
     try:
         payload = _parse_session_payload(data)
+        client_session_id = _client_session_id(data)
     except ValueError as exc:
         return error_response(str(exc))
 
@@ -220,6 +249,7 @@ def record_game_session():
         cognitive_domain=payload['cognitive_domain'],
         score=payload['score'],
         performance_band=evaluation['band'],
+        client_session_id=client_session_id,
     )
     history_eval = adaptive_engine.evaluate_recent_history(user_id, payload['game_id'], payload['level'])
     adaptive_engine.persist_state(user_id, payload['game_id'], history_eval)

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'api_service.dart';
 // Mindora - Adaptive Difficulty Engine
 // Modular cognitive comfort evaluation system designed for elderly users.
@@ -61,11 +63,22 @@ class AdaptiveDifficulty {
 
   final List<SessionMetrics> _history = [];
 
-  void recordSession(SessionMetrics metrics) {
+  /// Records the attempt locally and persists it through the shared API layer.
+  ///
+  /// Returns the backend save outcome so game screens can tell the player when
+  /// an attempt is queued for later sync instead of silently losing it.
+  Future<GameSaveStatus> recordSession(SessionMetrics metrics) async {
     _history.add(metrics);
     try {
-      ApiService.instance.recordGameSession(metrics);
-    } catch (_) {}
+      final recorded = await ApiService.instance.recordGameSession(metrics);
+      if (recorded != null) return GameSaveStatus.saved;
+      return ApiService.instance.lastGameSaveStatus;
+    } catch (error) {
+      // Keep the local history and let the offline queue handle retries; never
+      // fail the completion flow because persistence had a problem.
+      debugPrint('AdaptiveDifficulty.recordSession failed: $error');
+      return GameSaveStatus.failed;
+    }
   }
 
   /// Evaluates the user's comfort based on recent performance

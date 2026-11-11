@@ -8,6 +8,8 @@ class GameSession {
   final int moves;
   final int pairsMatched;
   final bool completed;
+  final int level;
+  final double score;
 
   GameSession({
     required this.gameName,
@@ -16,6 +18,8 @@ class GameSession {
     required this.moves,
     required this.pairsMatched,
     required this.completed,
+    this.level = 0,
+    this.score = 0,
   });
 }
 
@@ -74,12 +78,28 @@ class GameProgress extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Replaces local history with server history. Rows are expected newest-first.
-  /// Returns false when no valid rows were supplied.
+  /// Drops cached progress. Used on sign-out and when the signed-in account
+  /// changes so one Loved One never sees another account's history.
+  void clear() {
+    if (_sessions.isEmpty) return;
+    _sessions.clear();
+    notifyListeners();
+  }
+
+  /// Replaces local history with the authoritative server history.
+  ///
+  /// [rows] are the backend rows (newest-first). A successful empty response is
+  /// authoritative and clears the cache, while a payload that cannot be parsed
+  /// keeps the last known-good data. Returns true when the cache was updated.
   bool replaceFromServer(List<dynamic> rows) {
     final parsed = <GameSession>[];
     for (final row in rows) {
       if (row is! Map) continue;
+      final status = row['status']?.toString().toLowerCase();
+      // A session that is still being played is not progress yet. Abandoned
+      // sessions are excluded from analytics too, so My Progress stays
+      // consistent with the caregiver dashboard.
+      if (status == 'started' || status == 'abandoned') continue;
       final date = _parseServerDate(row['created_at']) ?? DateTime.now();
       final seconds = _asInt(row['duration_seconds']);
       final correct = _asInt(row['correct_matches']);
@@ -95,9 +115,11 @@ class GameProgress extends ChangeNotifier {
         completed: row['completed'] == true ||
             row['completed'] == 1 ||
             row['completed'] == '1',
+        level: _asInt(row['level']),
+        score: _asDouble(row['score']),
       ));
     }
-    if (parsed.isEmpty) return false;
+    if (rows.isNotEmpty && parsed.isEmpty) return false;
     _sessions
       ..clear()
       ..addAll(parsed.reversed);
@@ -119,6 +141,11 @@ class GameProgress extends ChangeNotifier {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static double _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   static String _displayName(String gameId) {

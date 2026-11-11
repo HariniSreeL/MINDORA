@@ -143,6 +143,81 @@ The live test signs in as the seeded user, records a real game session, mood and
 Feel Good activity, generates a pairing code, signs in as the seeded caregiver,
 and verifies the dashboard response.
 
+### Phase 9 — Game-session persistence hardening
+
+- Root cause confirmed: the backend abandoned every `started` session for a game
+  as soon as the next level started. A result that arrived afterward was treated
+  as a duplicate and silently discarded. The client also recorded sessions
+  fire-and-forget and did not await session start.
+- `lib/services/api_service.dart`: per-game session tracker (session id, client
+  idempotency key, level, consumed flag), awaited start before result, duplicate
+  result suppression, retryable-vs-rejected classification
+  (`GameSaveStatus`), safer diagnostic logging, 12s game timeouts, and
+  queue-entry deduplication.
+- `lib/services/adaptive_difficulty.dart`: `recordSession` now awaits the API and
+  returns the save status.
+- All four games: shared `_persistSession` helper that never blocks the
+  completion dialog and only shows feedback when a save is queued or failed.
+- `backend/models/session_model.py`: idempotent start/result/fallback writes,
+  single-transaction session + result + progress updates, stale-only (300s)
+  abandonment, recovery of late results for abandoned sessions.
+- `backend/routes/game_routes.py`: accepts/validates `client_session_id` and
+  resolves result retries by it.
+- `backend/database/db.py` / `schema.sql`: additive `client_session_id` column
+  migration and unique `(user_id, client_session_id)` index (existing rows are
+  untouched).
+- `backend/app.py`: startup log of the resolved SQLite path and
+  `database_file` in `/api/health`.
+- Added `backend/tests/test_session_persistence.py` (11 tests) and
+  `test/api_service_game_session_test.dart` (8 tests).
+
+### Phase 9 test results
+
+| Command | Result |
+| --- | --- |
+| `D:\flutter\bin\flutter.bat analyze` | No issues found. |
+| `D:\flutter\bin\flutter.bat test --reporter expanded` | 15 passed, 1 skipped (opt-in live test). |
+| `python -m pytest tests -q` (from `backend/`) | 56 passed. |
+| On-disk SQLite proof (temp file, start + result) | `game_sessions` 1, `game_results` 1, `client_session_id` + unique index present. |
+| Existing local DB migration | 3 sessions / 2 results preserved; column and index added. |
+
+### Phase 10 - My Progress restoration from SQLite
+
+- Verified end-to-end against an isolated temporary SQLite file: register →
+  start → result → `GET /api/games/sessions` → `GET /api/games/progress` →
+  restart app → second-user isolation. The backend was already persisting
+  correctly; the defect was in the client's My Progress lifecycle.
+- Root causes fixed:
+  - The in-memory `GameProgress` cache was never cleared on sign-out or when a
+    different Loved One signed in.
+  - A successful empty history response did not clear stale cached rows.
+  - In-flight `started` sessions appeared as completed progress.
+  - Opening My Progress immediately after a game could race the result write.
+- `lib/game_progress.dart`: stable `level`/`score`, `clear()`,
+  `replaceFromServer` treats an empty success as authoritative, filters
+  `started`/`abandoned`, and keeps last-known-good data for unparseable payloads.
+- `lib/services/api_service.dart`: tracks the pending game-save future and
+  exposes `waitForPendingGameSave()`; clears the progress cache on logout,
+  account change and debug reset.
+- `lib/progress_page.dart`: restores auth before the protected request, waits
+  for the latest save to finish, flushes the retry queue, guards against stale
+  out-of-order responses, keeps existing data and shows an error when a refresh
+  fails, and shows `Level X • Score Y` for recent activity.
+- `backend/models/session_model.py` and
+  `backend/services/analytics_service.py`: deterministic
+  `created_at DESC, id DESC` ordering so same-second sessions list newest first.
+- Added `test/progress_page_test.dart` (8 tests) and 3 backend tests for
+  restart persistence, per-user scoping and caregiver refresh.
+
+### Phase 10 test results
+
+| Command | Result |
+| --- | --- |
+| `D:\flutter\bin\flutter.bat analyze` | No issues found. |
+| `D:\flutter\bin\flutter.bat test test/progress_page_test.dart --reporter expanded` | 8 passed. |
+| `D:\flutter\bin\flutter.bat test --reporter expanded` | 23 passed, 1 skipped (opt-in live test). |
+| `python -m pytest tests -q` (from `backend/`) | 59 passed. |
+
 ## Pending tasks / known limitations
 
 - Password reset and caregiver email verification are not implemented; an

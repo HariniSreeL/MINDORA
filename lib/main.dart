@@ -11,11 +11,12 @@ import 'app_settings.dart';
 import 'theme/mindora_theme.dart';
 import 'screens/games_hub_screen.dart';
 import 'screens/feel_good_screen.dart';
-import 'screens/caregiver_login_screen.dart';
+import 'screens/role_selection_screen.dart';
+import 'caregiver_portal.dart';
+import 'widgets/logout_button.dart';
 import 'models/level_data.dart';
 import 'services/audio_service.dart';
 import 'services/api_service.dart';
-import 'screens/user_auth_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -81,6 +82,7 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   bool _guest = false;
+  bool _wasAuthenticated = false;
 
   @override
   Widget build(BuildContext context) {
@@ -88,15 +90,32 @@ class _AuthGateState extends State<AuthGate> {
       animation: ApiService.instance,
       builder: (context, _) {
         final api = ApiService.instance;
-        if (api.isAuthenticated) {
-          return const HomeScreen();
+
+        // A session that expires (or is ended anywhere in the app) must not
+        // leave protected pushed screens visible over role selection.
+        if (!api.isAuthenticated && _wasAuthenticated) {
+          _wasAuthenticated = false;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          });
         }
+
+        if (api.isAuthenticated) {
+          _wasAuthenticated = true;
+          _guest = false;
+          // Role comes from the validated session, not from hidden UI, so a
+          // caregiver can never land in the Loved One home and vice versa.
+          return api.isCaregiver
+              ? const CaregiverPortal()
+              : const HomeScreen();
+        }
+
         if (_guest) {
           return const HomeScreen();
         }
-        return UserAuthScreen(
-          showBackButton: false,
-          onAuthenticated: () => setState(() => _guest = false),
+
+        return RoleSelectionScreen(
           onGuest: () => setState(() => _guest = true),
         );
       },
@@ -217,6 +236,15 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+
+                  // ── Logout (signed-in Loved Ones only) ──────────────
+                  if (ApiService.instance.isAuthenticated)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: const LogoutButton(compact: true),
+                    ),
+                  if (ApiService.instance.isAuthenticated)
+                    const SizedBox(height: 8),
 
                   // ── Greeting ────────────────────────────────────────
                   Text(
@@ -393,28 +421,6 @@ class HomeScreen extends StatelessWidget {
                         context,
                         MaterialPageRoute(
                           builder: (_) => const ProgressPage(),
-                        ),
-                      );
-                    },
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Caregiver Portal Entry
-                  _activityCard(
-                    context,
-                    icon: Icons.volunteer_activism_rounded,
-                    title: tr('Caregiver Portal', 'देखभालकर्ता पोर्टल'),
-                    subtitle: tr(
-                      'Dedicated caregiver login & dashboard',
-                      'देखभालकर्ता लॉगिन एवं डैशबोर्ड',
-                    ),
-                    color: MindoraColors.cardAmber,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const CaregiverLoginScreen(),
                         ),
                       );
                     },

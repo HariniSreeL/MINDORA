@@ -207,10 +207,38 @@ class _PatternMatchScreenState extends State<PatternMatchScreen> {
     }
   }
 
+  /// Saves the completed attempt and tells the player if it is waiting to sync.
+  void _persistSession(SessionMetrics metrics) {
+    AdaptiveDifficulty.instance.recordSession(metrics).then((status) {
+      if (!mounted) return;
+      if (status == GameSaveStatus.queued) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(tr(
+              'Saved on this device. It will sync when you are online.',
+              'इस डिवाइस पर सहेजा गया। ऑनलाइन होने पर सिंक हो जाएगा।',
+            )),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else if (status == GameSaveStatus.failed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(tr(
+              'Could not save this game to your account yet.',
+              'यह खेल अभी आपके खाते में सहेजा नहीं जा सका।',
+            )),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+  }
+
   void _onLevelCompleted() {
     stopwatch.stop();
 
-    AdaptiveDifficulty.instance.recordSession(
+    _persistSession(
       SessionMetrics(
         gameId: 'pattern_match',
         level: currentLevel,

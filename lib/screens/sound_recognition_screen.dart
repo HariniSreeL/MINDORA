@@ -192,14 +192,17 @@ class _SoundRecognitionScreenState extends State<SoundRecognitionScreen>
       }
     });
 
-    _audioPlayer.onPlayerComplete.listen((_) async {
-      await AudioService.instance.resumeAfterPriorityAudio();
+    _audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) {
         setState(() {
           _playerState = PlayerState.stopped;
         });
       }
     });
+
+    // Background music stays paused for the whole Sound Recognition session so
+    // target sounds, instructions and effects always have complete priority.
+    AudioService.instance.pauseForPriorityAudio();
   }
 
   @override
@@ -208,6 +211,7 @@ class _SoundRecognitionScreenState extends State<SoundRecognitionScreen>
     stopwatch.stop();
     _audioPlayer.stop();
     _audioPlayer.dispose();
+    // Only leaving the game restores the very low background music.
     AudioService.instance.resumeAfterPriorityAudio();
     super.dispose();
   }
@@ -215,7 +219,6 @@ class _SoundRecognitionScreenState extends State<SoundRecognitionScreen>
   void _loadLevel(int lvl) async {
     ApiService.instance.beginGameSession('sound_recognition', lvl);
     await _audioPlayer.stop();
-    await AudioService.instance.resumeAfterPriorityAudio();
     setState(() {
       currentLevel = lvl;
       selectedChoice = null;
@@ -246,7 +249,6 @@ class _SoundRecognitionScreenState extends State<SoundRecognitionScreen>
       await _audioPlayer.stop();
       await _audioPlayer.play(AssetSource(challenge.targetSound.audioAsset));
     } catch (e) {
-      await AudioService.instance.resumeAfterPriorityAudio();
       if (mounted) {
         setState(() {
           _isLoadingAudio = false;
@@ -276,17 +278,44 @@ class _SoundRecognitionScreenState extends State<SoundRecognitionScreen>
 
     if (correct) {
       await _audioPlayer.stop();
-      await AudioService.instance.resumeAfterPriorityAudio();
       _onLevelCompleted();
     } else {
       setState(() => mistakes++);
     }
   }
 
+  /// Saves the completed attempt and tells the player if it is waiting to sync.
+  void _persistSession(SessionMetrics metrics) {
+    AdaptiveDifficulty.instance.recordSession(metrics).then((status) {
+      if (!mounted) return;
+      if (status == GameSaveStatus.queued) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(tr(
+              'Saved on this device. It will sync when you are online.',
+              'इस डिवाइस पर सहेजा गया। ऑनलाइन होने पर सिंक हो जाएगा।',
+            )),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else if (status == GameSaveStatus.failed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(tr(
+              'Could not save this game to your account yet.',
+              'यह खेल अभी आपके खाते में सहेजा नहीं जा सका।',
+            )),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    });
+  }
+
   void _onLevelCompleted() {
     stopwatch.stop();
 
-    AdaptiveDifficulty.instance.recordSession(
+    _persistSession(
       SessionMetrics(
         gameId: 'sound_recognition',
         level: currentLevel,
@@ -505,7 +534,6 @@ class _SoundRecognitionScreenState extends State<SoundRecognitionScreen>
                                 icon: const Icon(Icons.stop_circle_rounded, color: MindoraColors.terracotta, size: 28),
                                 onPressed: () async {
                                   await _audioPlayer.stop();
-                                  await AudioService.instance.resumeAfterPriorityAudio();
                                 },
                               ),
                             ] else ...[

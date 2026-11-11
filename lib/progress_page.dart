@@ -20,6 +20,7 @@ class _ProgressPageState extends State<ProgressPage> {
 
   bool _loading = false;
   String? _serverError;
+  int _loadRequestId = 0;
 
   @override
   void initState() {
@@ -29,11 +30,33 @@ class _ProgressPageState extends State<ProgressPage> {
 
   Future<void> _loadHistory() async {
     final api = ApiService.instance;
-    if (!api.isAuthenticated || !api.isUser) return;
-    if (mounted) setState(() => _loading = true);
+    // A protected request must never run before the saved sign-in is restored.
+    if (!api.initialized) {
+      await api.initialize();
+    }
+    if (!api.isAuthenticated || !api.isUser) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+
+    final requestId = ++_loadRequestId;
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _serverError = null;
+      });
+    }
+
+    // A game may have finished a moment ago; let its result reach the backend
+    // (or the retry queue) before reading the history back.
+    await api.waitForPendingGameSave();
+    await api.flushPending();
+
     final rows = await api.fetchGameHistory(limit: 100);
-    if (!mounted) return;
+    if (!mounted || requestId != _loadRequestId) return;
+
     if (rows == null) {
+      // Keep whatever is already on screen; a failed refresh must not wipe it.
       setState(() {
         _loading = false;
         _serverError = api.lastError ??
@@ -42,10 +65,14 @@ class _ProgressPageState extends State<ProgressPage> {
       });
       return;
     }
-    GameProgress.instance.replaceFromServer(rows);
+
+    final applied = GameProgress.instance.replaceFromServer(rows);
     setState(() {
       _loading = false;
-      _serverError = null;
+      _serverError = applied
+          ? null
+          : tr('Could not read your saved progress. Please try again.',
+              'आपकी सहेजी गई प्रगति पढ़ी नहीं जा सकी। कृपया पुनः प्रयास करें।');
     });
   }
 
@@ -330,6 +357,22 @@ class _ProgressPageState extends State<ProgressPage> {
                                       fontSize: 12,
                                     ),
                                   ),
+                                  if (session.level > 0)
+                                    Text(
+                                      session.score > 0
+                                          ? tr(
+                                              'Level ${session.level} • Score ${session.score.round()}',
+                                              'स्तर ${session.level} • स्कोर ${session.score.round()}',
+                                            )
+                                          : tr(
+                                              'Level ${session.level}',
+                                              'स्तर ${session.level}',
+                                            ),
+                                      style: const TextStyle(
+                                        color: Colors.black54,
+                                        fontSize: 12,
+                                      ),
+                                    ),
                                   Text(
                                     session.completed
                                         ? tr('Completed', 'पूरा हुआ')

@@ -43,6 +43,8 @@ def create_app(config_name=None, database_path=None):
     set_active_db_path(db_path)
     try:
         init_db(db_path)
+        # Server-side diagnostic only: confirms which SQLite file receives writes.
+        app.logger.info('Mindora database file: %s', os.path.abspath(str(db_path)))
     except Exception as exc:
         app.logger.error('Database initialization failed: %s', exc)
         if app.config.get('TESTING'):
@@ -70,6 +72,7 @@ def create_app(config_name=None, database_path=None):
             'version': '1.0.0',
             'problem_statement': 'SIH26003',
             'database': 'SQLite connected' if database_ok else 'SQLite unavailable',
+            'database_file': os.path.basename(str(db_path)) if db_path else None,
             'adaptive_engine': 'rule_based',
             'ml_trained': False,
             'games_supported': [

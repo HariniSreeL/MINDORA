@@ -89,6 +89,14 @@ class _UserAuthScreenState extends State<UserAuthScreen> {
           backgroundColor: MindoraColors.cream,
           appBar: AppBar(
             automaticallyImplyLeading: widget.showBackButton,
+            leading: widget.showBackButton
+                ? IconButton(
+                    tooltip: tr('Back to role selection',
+                        'भूमिका चयन पर वापस जाएँ'),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    onPressed: () => Navigator.of(context).maybePop(),
+                  )
+                : null,
             title: Text(
               _registerMode
                   ? tr('Create Account', 'खाता बनाएँ')

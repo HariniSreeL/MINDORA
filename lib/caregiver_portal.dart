@@ -8,8 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'theme/mindora_theme.dart';
 import 'app_settings.dart';
-import 'screens/caregiver_login_screen.dart';
 import 'services/api_service.dart';
+import 'widgets/logout_button.dart';
 
 class CaregiverPortal extends StatefulWidget {
   const CaregiverPortal({super.key});
@@ -92,15 +92,6 @@ class _CaregiverPortalState extends State<CaregiverPortal> {
       _error = loadError;
       _loading = false;
     });
-  }
-
-  Future<void> _signOut() async {
-    await ApiService.instance.logout();
-    if (!mounted) return;
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const CaregiverLoginScreen()),
-    );
   }
 
   Future<void> _showPairingDialog() async {
@@ -360,18 +351,31 @@ class _CaregiverPortalState extends State<CaregiverPortal> {
                 icon: const Icon(Icons.people_alt_outlined),
                 onPressed: _showManageConnections,
               ),
-              IconButton(
-                tooltip: tr('Sign Out', 'साइन आउट'),
-                icon: const Icon(Icons.logout_rounded),
-                onPressed: _signOut,
-              ),
             ],
           ),
           body: SafeArea(
-            child: RefreshIndicator(
-              onRefresh: () => _load(showSpinner: false),
-              color: MindoraColors.forestGreen,
-              child: _buildBody(),
+            child: Column(
+              children: [
+                // Labelled Logout stays visible above every dashboard state,
+                // including loading, errors and the unpaired state.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 6, 20, 2),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: LogoutButton(
+                      key: const Key('caregiver-logout-button'),
+                      compact: true,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () => _load(showSpinner: false),
+                    color: MindoraColors.forestGreen,
+                    child: _buildBody(),
+                  ),
+                ),
+              ],
             ),
           ),
         );

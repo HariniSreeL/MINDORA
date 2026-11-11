@@ -15,7 +15,8 @@ class AppSettings extends ChangeNotifier {
   String selectedLanguage = 'English';
   String caregiverLanguage = 'English';
   bool backgroundMusicEnabled = true;
-  double musicVolume = 0.5;
+  // Background audio is intentionally very soft; see AudioService.
+  double musicVolume = 0.05;
   bool highContrastMode = false;
 
   double get textScale {
@@ -131,7 +132,7 @@ class AppSettings extends ChangeNotifier {
     selectedLanguage = prefs.getString('selectedLanguage') ?? 'English';
     caregiverLanguage = prefs.getString('caregiverLanguage') ?? 'English';
     backgroundMusicEnabled = prefs.getBool('backgroundMusic') ?? true;
-    musicVolume = prefs.getDouble('musicVolume') ?? 0.5;
+    musicVolume = prefs.getDouble('musicVolume') ?? 0.05;
     highContrastMode = prefs.getBool('highContrastMode') ?? false;
 
     notifyListeners();
@@ -170,7 +171,9 @@ class AppSettings extends ChangeNotifier {
   }
 
   Future<void> setMusicVolume(double volume) async {
-    musicVolume = volume.clamp(0.0, 1.0);
+    // Keep the stored preference inside the deliberately soft range so a
+    // restart never restores loud background music.
+    musicVolume = volume.clamp(0.0, 0.10);
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();

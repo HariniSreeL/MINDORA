@@ -10,6 +10,7 @@ import 'localization/app_localizations.dart';
 import 'screens/user_auth_screen.dart';
 import 'services/api_service.dart';
 import 'services/audio_service.dart';
+import 'widgets/logout_button.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -21,7 +22,6 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool _moodSharing = false;
   bool _loadingConsent = false;
-  bool _signingOut = false;
 
   String tr(String en, String hi, {String? key}) =>
       AppSettings.instance.trBilingual(en, hi, key: key);
@@ -60,19 +60,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   'मनोदशा साझा करने की सेटिंग अपडेट नहीं हो सकी।')),
         ),
       );
-    }
-  }
-
-  Future<void> _signOut() async {
-    setState(() => _signingOut = true);
-    await ApiService.instance.logout();
-    if (!mounted) return;
-    setState(() {
-      _signingOut = false;
-      _moodSharing = false;
-    });
-    if (Navigator.of(context).canPop()) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 
@@ -382,22 +369,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                 },
                               ),
                             ],
-                            const SizedBox(height: 6),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _signingOut ? null : _signOut,
-                                icon: _signingOut
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2),
-                                      )
-                                    : const Icon(Icons.logout_rounded),
-                                label: Text(tr('Sign out', 'साइन आउट')),
-                              ),
-                            ),
+                            const SizedBox(height: 10),
+                            const LogoutButton(),
                           ],
                         )
                       : Column(
@@ -635,16 +608,18 @@ class _SettingsPageState extends State<SettingsPage> {
                               const Icon(Icons.volume_down_rounded, size: 20, color: MindoraColors.textMuted),
                               Expanded(
                                 child: Slider(
-                                  value: audio.volume,
+                                  value: audio.volume.clamp(
+                                      0.0, AudioService.maxBackgroundVolume),
                                   min: 0.0,
-                                  max: 1.0,
+                                  max: AudioService.maxBackgroundVolume,
                                   activeColor: MindoraColors.sageGreen,
                                   inactiveColor: MindoraColors.borderLight,
                                   onChanged: (val) {
-                                    audio.setVolume(val);
-                                    settings.setMusicVolume(val);
+                                    final soft = AudioService.normalizeVolume(val);
+                                    audio.setVolume(soft);
+                                    settings.setMusicVolume(soft);
                                     ApiService.instance
-                                        .syncPreferences(musicVolume: val);
+                                        .syncPreferences(musicVolume: soft);
                                   },
                                 ),
                               ),
